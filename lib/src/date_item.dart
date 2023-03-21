@@ -29,7 +29,7 @@ class DateItem extends StatefulWidget {
   final Alignment? decorationAlignment;
 
   /// Specify a shape
-  final BoxShape? dayShapeBorder;
+  final OutlinedBorder? dayShapeBorder;
 
   /// [Callback] function for press event
   final void Function(DateTime)? onDatePressed;
@@ -84,7 +84,8 @@ class __DateItemState extends State<DateItem> {
             /// Check and set [Background] of today
             if (compareDate(widget.date, widget.today)) {
               _defaultBackgroundColor = widget.todayBackgroundColor;
-            } else if (!data.hasError && data.hasData) {
+            }
+            if (!data.hasError && data.hasData) {
               final DateTime? dateSelected = data.data;
               if (compareDate(widget.date, dateSelected)) {
                 _defaultBackgroundColor = widget.pressedBackgroundColor;
@@ -106,33 +107,33 @@ class __DateItemState extends State<DateItem> {
         alignment: FractionalOffset.center,
         child: GestureDetector(
           onLongPress: _onLongPressed,
-          child: GestureDetector(
-            onTap: _onPressed,
-            child: Container(
-                decoration: BoxDecoration(
-                  color: _defaultBackgroundColor!,
-                  shape: widget.dayShapeBorder!,
-                ),
-                padding: EdgeInsets.all(5),
-                child: Stack(
-                  children: <Widget>[
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      top: 0,
-                      bottom: 0,
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          '${widget.date!.day}',
-                          style: _defaultTextStyle!,
-                        ),
-                      ),
-                    ),
-                    _decoration()
-                  ],
-                )),
+          child:ElevatedButton(
+  onPressed: _onPressed,
+  style: ElevatedButton.styleFrom(
+    padding: EdgeInsets.all(5),
+    shape: widget.dayShapeBorder!,
+  ).copyWith(
+    backgroundColor: MaterialStateProperty.all(_defaultBackgroundColor),
+  ),
+  child: Stack(
+    children: <Widget>[
+      Positioned(
+        left: 0,
+        right: 0,
+        top: 0,
+        bottom: 0,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            '${widget.date!.day}',
+            style: _defaultTextStyle!,
           ),
+        ),
+      ),
+      _decoration()
+    ],
+  ),
+),
         ),
       );
 

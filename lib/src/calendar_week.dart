@@ -1,6 +1,6 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:flutter_calendar_week/src/custom_scroll_behaiver.dart';
 import 'package:flutter_calendar_week/src/date_item.dart';
 import 'package:flutter_calendar_week/src/models/decoration_item.dart';
 import 'package:flutter_calendar_week/src/models/week_item.dart';
@@ -9,6 +9,8 @@ import 'package:flutter_calendar_week/src/utils/cache_stream.dart';
 import 'package:flutter_calendar_week/src/utils/compare_date.dart';
 import 'package:flutter_calendar_week/src/utils/find_current_week_index.dart';
 import 'package:flutter_calendar_week/src/utils/separate_weeks.dart';
+
+import 'day_of_week.dart';
 
 class CalendarWeekController {
 /*
@@ -33,7 +35,6 @@ Example:
                 onWeekChanged: () {
                   // Do something
                 },
-                monthViewBuilder: (date) => Text(date.toString()),
                 decorations: [
                   DecorationItem(
                       decorationAlignment: FractionalOffset.bottomRight,
@@ -110,10 +111,16 @@ class CalendarWeek extends StatefulWidget {
   final DateTime maxDate;
 
   /// Style of months
-  final Widget Function(DateTime)? monthViewBuilder;
+  final TextStyle monthStyle;
 
   /// Style of day of week
   final TextStyle dayOfWeekStyle;
+
+  /// Style of day of week when selected
+  final TextStyle pressedDayOfWeekStyle;
+
+  /// Style of the day of week when it's today
+  final TextStyle todayDayOfWeekStyle;
 
   /// Style of weekends days
   final TextStyle weekendsStyle;
@@ -149,7 +156,7 @@ class CalendarWeek extends StatefulWidget {
   final Color backgroundColor;
 
   /// List contain titles day of week
-  final List<String> daysOfWeek;
+  final List<DayOfWeek> daysOfWeek;
 
   /// List contain title months
   final List<String> months;
@@ -167,7 +174,7 @@ class CalendarWeek extends StatefulWidget {
   final EdgeInsets marginMonth;
 
   /// Shape of day
-  final BoxShape dayShapeBorder;
+  final OutlinedBorder? dayShapeBorder;
 
   /// List of decorations
   final List<DecorationItem> decorations;
@@ -186,8 +193,10 @@ class CalendarWeek extends StatefulWidget {
       this.maxDate,
       this.minDate,
       this.height,
-      this.monthViewBuilder,
+      this.monthStyle,
       this.dayOfWeekStyle,
+      this.pressedDayOfWeekStyle,
+      this.todayDayOfWeekStyle,
       this.monthAlignment,
       this.dateStyle,
       this.todayDateStyle,
@@ -219,8 +228,13 @@ class CalendarWeek extends StatefulWidget {
           DateTime? maxDate,
           DateTime? minDate,
           double height = 100,
-          Widget Function(DateTime)? monthViewBuilder,
+          TextStyle monthStyle =
+              const TextStyle(color: Colors.blue, fontWeight: FontWeight.w600),
           TextStyle dayOfWeekStyle =
+              const TextStyle(color: Colors.blue, fontWeight: FontWeight.w600),
+          TextStyle pressedDayOfWeekStyle =
+              const TextStyle(color: Colors.blue, fontWeight: FontWeight.w600),
+          TextStyle todayDayOfWeekStyle =
               const TextStyle(color: Colors.blue, fontWeight: FontWeight.w600),
           FractionalOffset monthAlignment = FractionalOffset.center,
           TextStyle dateStyle =
@@ -235,7 +249,7 @@ class CalendarWeek extends StatefulWidget {
           Function(DateTime)? onDatePressed,
           Function(DateTime)? onDateLongPressed,
           Color backgroundColor = Colors.white,
-          List<String> dayOfWeek = dayOfWeekDefault,
+          List<DayOfWeek> dayOfWeek = dayOfWeekDefault,
           List<String> month = monthDefaults,
           bool showMonth = true,
           List<int> weekendsIndexes = weekendsIndexesDefault,
@@ -243,7 +257,7 @@ class CalendarWeek extends StatefulWidget {
               const TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
           EdgeInsets marginMonth = const EdgeInsets.symmetric(vertical: 4),
           EdgeInsets marginDayOfWeek = const EdgeInsets.symmetric(vertical: 4),
-          BoxShape dayShapeBorder = BoxShape.circle,
+          CircleBorder dayShapeBorder = const CircleBorder(),
           List<DecorationItem> decorations = const [],
           CalendarWeekController? controller,
           Function()? onWeekChanged}) =>
@@ -252,8 +266,10 @@ class CalendarWeek extends StatefulWidget {
           maxDate ?? DateTime.now().add(Duration(days: 180)),
           minDate ?? DateTime.now().add(Duration(days: -180)),
           height,
-          monthViewBuilder,
+          monthStyle,
           dayOfWeekStyle,
+          pressedDayOfWeekStyle,
+          todayDayOfWeekStyle,
           monthAlignment,
           dateStyle,
           todayDateStyle,
@@ -319,6 +335,8 @@ class _CalendarWeekState extends State<CalendarWeek> {
     /// Init Page controller
     /// Set [initialPage] is page contain today
     _pageController = PageController(initialPage: controller._currentWeekIndex);
+
+    _cacheStream.add(DateTime.now());
   }
 
   @override
@@ -335,17 +353,14 @@ class _CalendarWeekState extends State<CalendarWeek> {
       color: widget.backgroundColor,
       width: double.infinity,
       height: widget.height,
-      child: ScrollConfiguration(
-        behavior: CustomScrollBehavior(),
-        child: PageView.builder(
-          controller: _pageController,
-          itemCount: controller._weeks.length,
-          onPageChanged: (currentPage) {
-            widget.controller!._currentWeekIndex = currentPage;
-            widget.onWeekChanged();
-          },
-          itemBuilder: (_, i) => _week(controller._weeks[i]),
-        ),
+      child: PageView.builder(
+        controller: _pageController,
+        itemCount: controller._weeks.length,
+        onPageChanged: (currentPage) {
+          widget.controller!._currentWeekIndex = currentPage;
+          widget.onWeekChanged();
+        },
+        itemBuilder: (_, i) => _week(controller._weeks[i]),
       ));
 
   /// Layout of week
@@ -353,12 +368,7 @@ class _CalendarWeekState extends State<CalendarWeek> {
         mainAxisAlignment: MainAxisAlignment.start,
         children: <Widget>[
           // Month
-          (widget.monthDisplay &&
-                  widget.monthViewBuilder != null &&
-                  weeks.days.firstWhere((el) => el != null) != null)
-              ? widget
-                  .monthViewBuilder!(weeks.days.firstWhere((el) => el != null)!)
-              : _monthItem(weeks.month),
+          widget.monthDisplay ? _monthItem(weeks.month) : Container(),
 
           /// Day of week layout
           _dayOfWeek(weeks.dayOfWeek),
@@ -375,34 +385,36 @@ class _CalendarWeekState extends State<CalendarWeek> {
             margin: widget.marginMonth,
             child: Text(
               title,
-              style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w600),
+              style: widget.monthStyle,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
             )),
       );
 
   /// Day of week layout
-  Widget _dayOfWeek(List<String> dayOfWeek) => Container(
+  Widget _dayOfWeek(List<DayOfWeek> dayOfWeek) => Container(
         margin: widget.marginDayOfWeek,
         child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: dayOfWeek.map(_dayOfWeekItem).toList()),
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: dayOfWeek.map(_dayOfWeekItem).toList(),
+        ),
       );
 
   /// Day of week item layout
-  Widget _dayOfWeekItem(String title) => Container(
+  Widget _dayOfWeekItem(DayOfWeek dayOfWeek) => Container(
       alignment: Alignment.center,
       child: FittedBox(
         fit: BoxFit.scaleDown,
         child: Container(
           width: 50,
           child: Text(
-            title,
-            style: widget.weekendsIndexes
-                        .indexOf(widget.daysOfWeek.indexOf(title)) !=
-                    -1
-                ? widget.weekendsStyle
-                : widget.dayOfWeekStyle,
+            dayOfWeek.name,
+            style: dayOfWeek.weekdayIndex ==
+                    widget.controller?.selectedDate.weekday
+                ? widget.pressedDayOfWeekStyle
+                : dayOfWeek.weekdayIndex == widget.controller?._today.weekday
+                    ? widget.todayDayOfWeekStyle
+                    : widget.dayOfWeekStyle,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
           ),
